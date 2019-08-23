@@ -8,6 +8,8 @@
 // hide code ripped from rpcview
 #include "ugly.h"
 
+#pragma comment(lib, "rpcrt4.lib")
+
 void consoleprint(void* ctxt, const char* stuff) {
 	std::cout << stuff;
 }
@@ -18,11 +20,11 @@ void ignore(const char* pFunction, ULONG Line, const char* pFormatString, ...) {
 
 void dumpinterface(RpcInterfaceInfo_T* intinfo) {
 	std::wcout << "Found: " << intinfo->Description << std::endl
-	          << "From: " << intinfo->Location << std::endl
-	          << "Base: " << intinfo->pLocationBase << std::endl
-	          << "No" << "\t"<< "Name" << "\t" << "Address" << std::endl;
-	for (int i = 0; i < intinfo->NumberOfProcedures; ++i) {
-		std::wcout << i << "\t" << intinfo->Name << "\t" << intinfo->ppProcAddressTable[i] << std::endl;
+		<< "From: " << intinfo->Location << std::endl
+		<< "Base: " << intinfo->pLocationBase << std::endl
+		<< "No" << "\t"<< "Name" << "\t" << "Address" << std::endl;
+	for (auto i = 0u; i < intinfo->NumberOfProcedures; ++i) {
+		std::wcout << i << "\t" << intinfo->Name << "\t" << (void*) intinfo->ppProcAddressTable[i] << std::endl;
 	}
 }
 
@@ -36,12 +38,12 @@ bool EnumProcessInterfacesCallback(RpcInterfaceInfo_T* intinfo, VOID* ctxt, BOOL
 	RpcDecompilerInfo_T RpcDecompilerInfo;
 	InitDecompilerInfo(intinfo, &RpcDecompilerInfo);
 	
-	RpcViewHelper_T viewer = {NULL, malloc, free, RpcGetProcessData, (RpcPrintFn_T)consoleprint, (RpcDebugFn_T)ignore, RpcGetInterfaceName };
-	VOID* decctxt = ((RpcDecompilerInitFn_T)dechelper->RpcDecompilerInitFn)(&viewer, &RpcDecompilerInfo);
+	RpcViewHelper_T viewer = {NULL, malloc, free, RpcGetProcessData, consoleprint, ignore, RpcGetInterfaceName };
+	VOID* decctxt = dechelper->RpcDecompilerInitFn(&viewer, &RpcDecompilerInfo);
 
-	((RpcDecompilerPrintAllProceduresFn_T)dechelper->RpcDecompilerPrintAllProceduresFn)(decctxt);
+	dechelper->RpcDecompilerPrintAllProceduresFn(decctxt);
 
-	((RpcDecompilerUninitFn_T)dechelper->RpcDecompilerUninitFn)(decctxt);
+	dechelper->RpcDecompilerUninitFn(decctxt);
 	return true;
 }
 
@@ -63,13 +65,13 @@ int main(int argc, char** argv) {
 	RpcCore_T* rpccore = (RpcCore_T*) GetProcAddress(coredll, RPC_CORE_EXPORT_SYMBOL);
 	RpcDecompilerHelper_T* dechelper = (RpcDecompilerHelper_T*)GetProcAddress(decdll, RPC_DECOMPILER_EXPORT_SYMBOL);
 
-	VOID* corectxt = ((RpcCoreInitFn_T) rpccore->RpcCoreInitFn)(true);
-	RpcProcessInfo_T* procinfo = ((RpcCoreGetProcessInfoFn_T)rpccore->RpcCoreGetProcessInfoFn)(corectxt, pid, 0, RPC_PROCESS_INFO_ALL);
+	VOID* corectxt = rpccore->RpcCoreInitFn(true);
+	RpcProcessInfo_T* procinfo = rpccore->RpcCoreGetProcessInfoFn(corectxt, pid, 0, RPC_PROCESS_INFO_ALL);
 
-	((RpcCoreEnumProcessInterfacesFn_T)rpccore->RpcCoreEnumProcessInterfacesFn)(corectxt, pid, (RpcCoreEnumProcessInterfacesCallbackFn_T)EnumProcessInterfacesCallback, (VOID*)dechelper, RPC_INTERFACE_INFO_ALL);
+	rpccore->RpcCoreEnumProcessInterfacesFn(corectxt, pid, (RpcCoreEnumProcessInterfacesCallbackFn_T)EnumProcessInterfacesCallback, (VOID*)dechelper, RPC_INTERFACE_INFO_ALL);
 
-	((RpcCoreFreeProcessInfoFn_T)rpccore->RpcCoreFreeProcessInfoFn)(corectxt, procinfo);
-	((RpcCoreUninitFn_T) rpccore->RpcCoreUninitFn)(corectxt);
+	rpccore->RpcCoreFreeProcessInfoFn(corectxt, procinfo);
+	rpccore->RpcCoreUninitFn(corectxt);
 	FreeLibrary(coredll);
 	FreeLibrary(decdll);
 }
